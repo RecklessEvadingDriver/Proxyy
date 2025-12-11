@@ -7,6 +7,7 @@ A high-performance, secure Python proxy library with automatic user-agent and IP
 🔄 **Smart Rotation**
 - Automatic user-agent rotation with 20+ diverse browser profiles
 - IP address rotation through multiple proxy backends
+- **Automatic free proxy fetching from the internet**
 - Configurable rotation strategies (random or round-robin)
 
 ⚡ **Performance**
@@ -26,6 +27,8 @@ A high-performance, secure Python proxy library with automatic user-agent and IP
 - Pass as a parameter to functions
 - Context manager support
 - Compatible with requests library patterns
+- **One-line free proxy integration**
+- **Host as HTTP server with URL access**
 
 ## Installation
 
@@ -50,6 +53,72 @@ print(response.json())
 # Clean up
 proxy.close()
 ```
+
+### Using Free Proxies from the Internet (NEW!)
+
+```python
+from proxyy import RotatingProxy, ProxyConfig, get_free_proxies
+
+# Automatically fetch free proxies from the internet
+free_proxies = get_free_proxies(max_proxies=20)
+print(f"Fetched {len(free_proxies)} free proxies")
+
+# Create configuration with free proxies
+config = ProxyConfig(
+    rotate_user_agent=True,
+    rotate_ip=True,
+    proxies=free_proxies,
+)
+
+# Use them!
+with RotatingProxy(config) as proxy:
+    response = proxy.get("https://api.example.com/data")
+    print(response.json())
+```
+
+### Host as HTTP Proxy Server (NEW!)
+
+Host Proxyy as an HTTP server and route requests through it via URL:
+
+```bash
+# Start server with free proxies
+python start_server.py --free-proxies --port 8080
+
+# Or without free proxies (user-agent rotation only)
+python start_server.py --port 8080
+```
+
+Then make requests from **any language or tool**:
+
+```python
+import requests
+
+# Method 1: Direct URL routing
+response = requests.get("http://localhost:8080/http://httpbin.org/ip")
+
+# Method 2: Standard proxy configuration
+proxies = {"http": "http://localhost:8080", "https": "http://localhost:8080"}
+response = requests.get("http://example.com", proxies=proxies)
+
+# Check health
+health = requests.get("http://localhost:8080/health").json()
+
+# Get statistics
+stats = requests.get("http://localhost:8080/stats").json()
+```
+
+```bash
+# Use from curl
+curl http://localhost:8080/http://httpbin.org/ip
+
+# Check server health
+curl http://localhost:8080/health
+
+# Get statistics
+curl http://localhost:8080/stats
+```
+
+Deploy anywhere (Heroku, AWS, GCP, etc.) and access from any device!
 
 ### Using Context Manager
 
@@ -138,6 +207,71 @@ with RotatingProxy() as proxy:
     # DELETE request
     response = proxy.delete("https://api.example.com/data/123")
 ```
+
+## Free Proxy Integration
+
+Proxyy can automatically fetch free proxies from public sources on the internet.
+
+### Quick Free Proxy Usage
+
+```python
+from proxyy import get_free_proxies, RotatingProxy, ProxyConfig
+
+# Fetch free proxies (fast, but some may not work)
+proxies = get_free_proxies(max_proxies=50)
+
+# Use them
+config = ProxyConfig(proxies=proxies, rotate_ip=True, rotate_user_agent=True)
+with RotatingProxy(config) as proxy:
+    response = proxy.get("https://api.example.com/data")
+```
+
+### Tested Free Proxies (Recommended)
+
+```python
+from proxyy import get_free_proxies, RotatingProxy, ProxyConfig
+
+# Fetch and test proxies (slower but more reliable)
+proxies = get_free_proxies(max_proxies=20, test_proxies=True)
+print(f"Found {len(proxies)} working proxies")
+
+config = ProxyConfig(proxies=proxies, rotate_ip=True)
+with RotatingProxy(config) as proxy:
+    response = proxy.get("https://api.example.com/data")
+```
+
+### Custom Free Proxy Fetcher
+
+```python
+from proxyy import FreeProxyFetcher
+
+# Create custom fetcher
+fetcher = FreeProxyFetcher(
+    timeout=15,
+    max_proxies=100
+)
+
+try:
+    # Fetch from all sources
+    proxies = fetcher.fetch_all()
+    print(f"Fetched {len(proxies)} proxies")
+    
+    # Or fetch and test
+    working_proxies = fetcher.fetch_and_test()
+    print(f"Found {len(working_proxies)} working proxies")
+    
+finally:
+    fetcher.close()
+```
+
+### Free Proxy Sources
+
+The library automatically fetches from multiple public sources:
+- ProxyScrape API
+- GitHub proxy lists (TheSpeedX, ShiftyTR, monosans, clarketm)
+- Proxy-list.download API
+
+**Note:** Free proxies can be unreliable. Use `test_proxies=True` for better results, or provide your own proxy list for production use.
 
 ## Configuration Options
 
@@ -237,16 +371,181 @@ custom_agents = [
 config = ProxyConfig(user_agents=custom_agents)
 ```
 
+## Hosted Proxy Server
+
+Host Proxyy as an HTTP server accessible via URL - perfect for deployment!
+
+### Starting the Server
+
+```bash
+# Basic usage - user-agent rotation only
+python start_server.py
+
+# With free proxies from internet
+python start_server.py --free-proxies
+
+# Custom port
+python start_server.py --port 9000 --free-proxies
+
+# With rate limiting
+python start_server.py --free-proxies --rate-limit 2.0
+
+# Round-robin rotation
+python start_server.py --free-proxies --strategy round-robin
+
+# All options
+python start_server.py --host 0.0.0.0 --port 8080 --free-proxies --max-proxies 100 --strategy random --rate-limit 1.5
+```
+
+### Server Command Line Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--host` | 0.0.0.0 | Host to bind to (0.0.0.0 = all interfaces) |
+| `--port` | 8080 | Port to listen on |
+| `--free-proxies` | False | Fetch and use free proxies |
+| `--max-proxies` | 50 | Maximum number of free proxies to fetch |
+| `--strategy` | random | Rotation strategy (random or round-robin) |
+| `--rate-limit` | None | Rate limit in requests/second |
+
+### Using the Hosted Proxy
+
+**Python:**
+```python
+import requests
+
+# Direct URL routing
+url = "http://localhost:8080/http://httpbin.org/get"
+response = requests.get(url)
+
+# Or use as standard proxy
+proxies = {
+    'http': 'http://localhost:8080',
+    'https': 'http://localhost:8080'
+}
+response = requests.get('http://example.com', proxies=proxies)
+```
+
+**cURL:**
+```bash
+# Direct request
+curl http://localhost:8080/http://httpbin.org/ip
+
+# Using as proxy
+curl -x http://localhost:8080 http://httpbin.org/ip
+```
+
+**Node.js:**
+```javascript
+const axios = require('axios');
+
+// Direct URL routing
+axios.get('http://localhost:8080/http://httpbin.org/get')
+  .then(response => console.log(response.data));
+
+// Using as proxy
+axios.get('http://example.com', {
+  proxy: {
+    host: 'localhost',
+    port: 8080
+  }
+});
+```
+
+**Any Language/Tool:**
+Just configure your HTTP client to use `http://localhost:8080` as the proxy!
+
+### Server Endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `/http://target-url` | Route request to target URL through proxy |
+| `/health` | Health check endpoint (returns JSON) |
+| `/stats` | Proxy statistics (returns JSON with proxy pool info) |
+
+### Deployment
+
+Deploy to any cloud platform:
+
+**Heroku:**
+```bash
+# Add Procfile
+echo "web: python start_server.py --host 0.0.0.0 --port \$PORT --free-proxies" > Procfile
+git push heroku main
+```
+
+**Docker:**
+```dockerfile
+FROM python:3.9-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+COPY . .
+CMD ["python", "start_server.py", "--host", "0.0.0.0", "--port", "8080", "--free-proxies"]
+```
+
+**AWS/GCP/Azure:**
+Deploy as a container or web service with the start command:
+```bash
+python start_server.py --host 0.0.0.0 --port 8080 --free-proxies
+```
+
+Then access from anywhere: `http://your-domain.com/http://target-url`
+
+### Programmatic Server Control
+
+```python
+from proxyy import ProxyServer, ProxyConfig
+
+# Create custom configuration
+config = ProxyConfig(
+    rotate_user_agent=True,
+    rotate_ip=True,
+    rotation_strategy='random',
+    rate_limit=2.0
+)
+
+# Initialize server
+server = ProxyServer(
+    host='0.0.0.0',
+    port=8080,
+    config=config,
+    use_free_proxies=True,
+    max_free_proxies=50
+)
+
+# Start server (blocking)
+server.start()
+
+# Or use run_server convenience function
+from proxyy import run_server
+
+run_server(
+    host='0.0.0.0',
+    port=8080,
+    use_free_proxies=True,
+    rotation_strategy='random'
+)
+```
+
 ## Examples
 
 See the `examples/` directory for more usage examples:
 - `basic_usage.py` - Basic features and configuration
 - `as_parameter.py` - Using as a parameter in functions and classes
+- `free_proxy_usage.py` - Using free proxies from the internet
+- `hosted_proxy_usage.py` - Using the hosted proxy server
 
 Run examples:
 ```bash
 python examples/basic_usage.py
 python examples/as_parameter.py
+python examples/free_proxy_usage.py
+
+# For hosted proxy example, first start the server:
+python start_server.py --free-proxies
+# Then in another terminal:
+python examples/hosted_proxy_usage.py
 ```
 
 ## Statistics and Monitoring
