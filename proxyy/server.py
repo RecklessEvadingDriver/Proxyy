@@ -23,6 +23,18 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
     HTTP request handler that forwards requests through the rotating proxy.
     """
     
+    # Maximum content length (10MB)
+    MAX_CONTENT_LENGTH = 10 * 1024 * 1024
+    
+    # Internal network ranges to block (SSRF prevention)
+    BLOCKED_HOSTS = [
+        '127.', '0.0.0.0', 'localhost',
+        '10.', '172.16.', '172.17.', '172.18.', '172.19.',
+        '172.20.', '172.21.', '172.22.', '172.23.', '172.24.',
+        '172.25.', '172.26.', '172.27.', '172.28.', '172.29.',
+        '172.30.', '172.31.', '192.168.', '169.254.',
+    ]
+    
     rotating_proxy: Optional[RotatingProxy] = None
     
     def log_message(self, format, *args):
@@ -81,6 +93,21 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
                 self._send_error_response(400, "Invalid URL. Format: http://proxy-host:port/http://target-url")
                 return
             
+            # SSRF Protection: Block requests to internal networks
+            try:
+                from urllib.parse import urlparse
+                parsed_url = urlparse(target_url)
+                hostname = parsed_url.hostname or ''
+                
+                # Block internal/private IPs
+                for blocked in self.BLOCKED_HOSTS:
+                    if hostname.startswith(blocked):
+                        self._send_error_response(403, "Access to internal networks is forbidden")
+                        return
+            except Exception:
+                self._send_error_response(400, "Invalid URL format")
+                return
+            
             logger.info(f"Forwarding {method} request to: {target_url}")
             
             # Prepare request kwargs
@@ -96,9 +123,15 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             if headers:
                 kwargs['headers'] = headers
             
-            # Get request body for POST/PUT
+            # Get request body for POST/PUT with size limit
             if method in ['POST', 'PUT', 'PATCH']:
                 content_length = int(self.headers.get('Content-Length', 0))
+                
+                # DoS Protection: Limit request body size
+                if content_length > self.MAX_CONTENT_LENGTH:
+                    self._send_error_response(413, f"Request body too large. Maximum size: {self.MAX_CONTENT_LENGTH} bytes")
+                    return
+                
                 if content_length > 0:
                     body = self.rfile.read(content_length)
                     kwargs['data'] = body

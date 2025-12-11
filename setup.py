@@ -31,11 +31,7 @@ setup(
     ],
     python_requires=">=3.7",
     install_requires=[
-        "aiohttp>=3.9.0",
-        "aiohttp-socks>=0.8.0",
         "requests>=2.31.0",
-        "pyyaml>=6.0",
-        "user-agents>=2.2.0",
     ],
     keywords="proxy, rotation, user-agent, ip-rotation, web-scraping, http-client",
 )
