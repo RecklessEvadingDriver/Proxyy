@@ -1,0 +1,11 @@
+{
+  "name": "Proxyy",
+  "description": "Rotating proxy server with user-agent and IP rotation",
+  "repository": "https://github.com/RecklessEvadingDriver/Proxyy",
+  "keywords": ["proxy", "rotation", "web-scraping", "heroku"],
+  "buildpacks": [
+    {
+      "url": "heroku/python"
+    }
+  ]
+}
